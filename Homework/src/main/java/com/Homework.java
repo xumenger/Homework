@@ -6,6 +6,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Homework {
 	
@@ -44,14 +47,22 @@ public class Homework {
 		for (int i=0; i<20; i++) 
 			arr5[i] = Integer.valueOf(args[80 + i]);
 		
+		List<Integer[]> array = new ArrayList<Integer[]>();
+		array.add(arr1);
+		array.add(arr2);
+		array.add(arr3);
+		array.add(arr4);
+		array.add(arr5);
 		
-//		test1(arr1, arr2, arr3, arr4, arr5);
 		
-		test2(arr1, arr2, arr3, arr4, arr5);
-//		
-//		test3(arr1, arr2, arr3, arr4, arr5);
-//		
-//		test4(arr1, arr2, arr3, arr4, arr5);
+//		test1(array);
+		
+//		test2(array);
+		
+//		test3(array);
+		
+		// java 程序运行时，第一个参数指定对应的testId
+		test4(Integer.valueOf(args[0]));
 	}
 	
 
@@ -62,24 +73,14 @@ public class Homework {
 	 * 
 	 * @param args
 	 */
-	private static void test1(Integer[] arr1, Integer[] arr2, Integer[] arr3, Integer[] arr4, Integer[] arr5) {
+	private static void test1(List<Integer[]> array) {
 		
 		IntegerSort sort = new IntegerSort();
 		
-		sort.sort(arr1);
-		printArray(arr1);
-		
-		sort.sort(arr2);
-		printArray(arr2);
-		
-		sort.sort(arr3);
-		printArray(arr3);
-		
-		sort.sort(arr4);
-		printArray(arr4);
-		
-		sort.sort(arr5);
-		printArray(arr5);
+		for (Integer[] arr: array) {
+			sort.sort(arr);
+			printArray(arr);
+		}
 	}
 
 	
@@ -88,7 +89,7 @@ public class Homework {
 	 * @param args
 	 * @throws SQLException 
 	 */
-	private static void test2(Integer[] arr1, Integer[] arr2, Integer[] arr3, Integer[] arr4, Integer[] arr5) throws SQLException 
+	private static void test2(List<Integer[]> array) throws SQLException 
 	{	
 		Connection conn = null;
 		PreparedStatement ps = null;
@@ -99,12 +100,10 @@ public class Homework {
 			conn = getConn();
             if(conn.isClosed())
                 System.out.println("Failed connecting to the Database!");
-            
-            // 执行排序
-            IntegerSort sort = new IntegerSort();
-    		sort.sort(arr1);
-    		printArray(arr1);
-            
+            conn.setAutoCommit(false);
+
+			IntegerSort sort = new IntegerSort();
+			
             // 执行SQL
             String sql = "INSERT INTO TestMain(testType) VALUES(?)";
 			ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -112,10 +111,17 @@ public class Homework {
 			ps.executeUpdate();
 			rs = ps.getGeneratedKeys();
 			
-			
 			if(rs.next())
 				System.out.println("自增主键是: " + rs.getObject(1));
+            
+            for (Integer[] arr: array) {
+            	// 执行排序
+        		sort.sort(arr);
+        		printArray(arr);
+    		}
 			
+            conn.commit();
+            
         } catch(Exception e) {   
             e.printStackTrace();
         } finally {
@@ -130,20 +136,145 @@ public class Homework {
 	 * 每一组测试数据新增一行到TestDetail表，记录TestMain的自增主键
 	 * 每一组的测试数据(用,间隔)、测试开始时间和测试结束时间
 	 * @param args
+	 * @throws SQLException 
 	 */
-	private static void test3(Integer[] arr1, Integer[] arr2, Integer[] arr3, Integer[] arr4, Integer[] arr5) {
-		
-		
+	private static void test3(List<Integer[]> array) throws Exception 
+	{	
+		Connection conn = null;
+		PreparedStatement ps1 = null;
+		ResultSet rs1 = null;
+		try
+		{
+			// 获取数据库连接
+			conn = getConn();
+            if(conn.isClosed())
+                System.out.println("Failed connecting to the Database!");
+            conn.setAutoCommit(false);
+            
+			IntegerSort sort = new IntegerSort();
+			
+            // 执行SQL
+            String sql1 = "INSERT INTO TestMain(testType) VALUES(?)";
+			ps1 = conn.prepareStatement(sql1, Statement.RETURN_GENERATED_KEYS);
+			ps1.setString(1, sort.getName());
+			ps1.executeUpdate();
+			rs1 = ps1.getGeneratedKeys();
+			
+			Integer key = 0;
+			// 获取自增主键
+			if (rs1.next()) {
+			    key = rs1.getInt(1);
+				System.out.println("自增主键是: " + key);
+			}
+            
+            for (Integer[] arr: array) {
+            	// MySQL 中的datetime 与java.sql.Timestamp; 对应
+            	Timestamp begin = new Timestamp(System.currentTimeMillis());
+            	
+            	// 执行排序
+        		sort.sort(arr);
+        		printArray(arr);
+        		
+        		// 排序速度很快，这里加个睡眠帮助测试4()
+        		Thread.currentThread().sleep(1000);
+        		
+        		Timestamp end = new Timestamp(System.currentTimeMillis());
+        		
+        		PreparedStatement ps2 = null;
+        		ResultSet rs2 = null;
+        		try {
+	        		// 执行SQL
+	                String sql2 = "INSERT INTO TestDetail(testId, testData, biginTime, endTime) VALUES(?, ?, ?, ?)";
+	    			ps2 = conn.prepareStatement(sql2, Statement.RETURN_GENERATED_KEYS);
+	    			ps2.setInt(1, key);
+	    			String s = getArrayString(arr);
+	    			ps2.setString(2, s);
+	    			ps2.setTimestamp(3, begin);
+	    			ps2.setTimestamp(4, end);
+	    			ps2.executeUpdate();
+	    			rs2 = ps2.getGeneratedKeys();
+        		} catch(Exception e) {   
+                    e.printStackTrace();
+                } finally {
+                	rs2.close();
+                	ps2.close();
+                }
+    		}
+			
+            conn.commit();
+        } catch(Exception e) {   
+            e.printStackTrace();
+        } finally {
+        	rs1.close();
+        	ps1.close();
+        	conn.close();
+        }
 	}
 	
 	
 	/**
 	 * 以TestMain的主键为查询条件，通过JDBC的查询输出每一组排序的排序消耗时间
 	 * @param args
+	 * @throws SQLException 
 	 */
-	private static void test4(Integer[] arr1, Integer[] arr2, Integer[] arr3, Integer[] arr4, Integer[] arr5) {
+	private static void test4(Integer testId) throws SQLException {
 		
-		
+		Connection conn = null;
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		try
+		{
+			// 获取数据库连接
+			conn = getConn();
+            if(conn.isClosed())
+                System.out.println("Failed connecting to the Database!");
+            conn.setAutoCommit(false);
+			
+            // 执行SQL
+            String sql1 = "select * from TestDetail where testId = ?";
+			ps = conn.prepareStatement(sql1, Statement.RETURN_GENERATED_KEYS);
+			ps.setInt(1, testId);
+			rs = ps.executeQuery();
+
+			// 每行
+			Integer max = null;
+			Integer min = null;
+					
+			Timestamp begin = null;
+			Timestamp end = null;
+			
+			while (rs.next()) {
+				Integer detailId = rs.getInt("detailId");
+				Timestamp biginTime = rs.getTimestamp("biginTime");
+				Timestamp endTime = rs.getTimestamp("endTime");
+				
+				if ((max == null) || (detailId > max)) {
+					max = detailId;
+					end = endTime;
+				}
+				
+				if ((min == null) || (detailId < max)) {
+					min = detailId;
+					begin = biginTime;
+				}
+			}
+			
+			// 计算
+			if ((null != begin) && (null != end)) {
+				long diff = end.getTime() - begin.getTime();
+				System.out.println("耗时(ms): " + diff);
+			} else {
+				System.out.println("该批次没有记录！！！");
+			}
+			
+            conn.commit();
+        } catch(Exception e) {   
+            e.printStackTrace();
+        } finally {
+        	rs.close();
+        	ps.close();
+        	conn.close();
+        }
 	}
 	
 	
@@ -187,5 +318,23 @@ public class Homework {
         conn = DriverManager.getConnection(url,user,password);
         
         return conn;
+	}
+	
+	/**
+	 * 
+	 * @param arr
+	 * @return
+	 */
+	private static String getArrayString(Integer[] arr) 
+	{
+		StringBuilder sb = new StringBuilder();
+		for (int i=0; i<arr.length; i++) {
+			sb.append(arr[i]);
+			sb.append(", ");
+		}
+		
+		String s = sb.toString();
+		
+		return s;
 	}
 }
